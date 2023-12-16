@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Jun app",
+  "description": "Link to G Suite Certification website",
+  "version": "1.1",
+  "icons": {
+    "128": "images/128.png"
+  },
+  "action": {
+    "default_icon": "images/128.png",
+    "default_popup": "popup.html"
+  },
+  // "background": {
+  //   "service_worker": "content.js"
+  // },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "nativeMessaging",
+    "storage",
+    "scripting"
+  ]
+}
