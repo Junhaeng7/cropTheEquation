@@ -1,32 +1,61 @@
-let captureArea = document.createElement("div");
-captureArea.setAttribute("id", "capture-area");
-captureArea.style.border = "2px dashed #000";
-captureArea.style.position = "absolute";
-captureArea.style.display = "none";
-captureArea.style.zIndex = "10000"; // High z-index value
-captureArea.style.cursor = "grab";
-document.body.appendChild(captureArea);
+function createCaptureArea() {
+  captureArea = document.createElement("div");
+  captureArea.setAttribute("id", "capture-area");
+  captureArea.style.border = "2px dashed #000";
+  captureArea.style.position = "absolute";
+  captureArea.style.display = "none";
+  captureArea.style.zIndex = "10000";
+  captureArea.style.cursor = "grab";
 
-let resizer = document.createElement("div");
-resizer.style.width = "10px";
-resizer.style.height = "10px";
-resizer.style.background = "blue";
-resizer.style.position = "absolute";
-resizer.style.right = "0";
-resizer.style.bottom = "0";
-resizer.style.cursor = "nwse-resize";
-captureArea.appendChild(resizer);
+  resizer = document.createElement("div");
+  resizer.style.width = "10px";
+  resizer.style.height = "10px";
+  resizer.style.background = "blue";
+  resizer.style.position = "absolute";
+  resizer.style.right = "0";
+  resizer.style.bottom = "0";
+  resizer.style.cursor = "nwse-resize";
+  captureArea.appendChild(resizer);
 
-let okButton = document.createElement("button");
-okButton.innerText = "OK";
-okButton.style.position = "absolute";
-okButton.style.zIndex = "10001"; // Make sure it's above the capture area
-// Position the button - adjust as needed
-okButton.style.bottom = "-30px";
-okButton.style.right = "-30px";
+  okButton = document.createElement("button");
+  okButton.innerText = "OK";
+  okButton.style.position = "absolute";
+  okButton.style.zIndex = "10001"; // Make sure it's above the capture area
+  // Position the button - adjust as needed
+  okButton.style.bottom = "-30px";
+  okButton.style.right = "-30px";
+  okButton.addEventListener("click", handleOkButtonClick);
+  captureArea.appendChild(okButton);
 
-captureArea.appendChild(okButton);
+  closeButton = document.createElement("button");
+  closeButton.innerText = "X";
+  closeButton.style.position = "absolute";
+  closeButton.style.left = "0";
+  closeButton.style.top = "0";
+  closeButton.style.zIndex = "10002";
+  closeButton.addEventListener("click", function () {
+    captureArea.remove(); // Remove the captureArea from the DOM
+    captureArea = null;
+    isCropping = false;
+    isResizing = false;
+    isMoving = false;
+    // document.body.classList.remove("cropping-mode");
+    startX = null;
+    startY = null;
+    endX = null;
+    endY = null;
+    movingX = null;
+    movingY = null;
+    document.body.style.cursor = "default";
+    document.body.style.pointerEvents = "auto";
 
+    //
+  });
+  captureArea.appendChild(closeButton);
+
+  return captureArea;
+}
+let captureArea, resizer, okButton, closeButton;
 let startX, startY, endX, endY;
 let movingX, movingY;
 let isCropping = false,
@@ -35,162 +64,92 @@ let isCropping = false,
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.action === "startCropping") {
+    showCaptureArea();
     isCropping = true;
-    captureArea.style.display = "block";
-    document.body.classList.remove("grab-cursor");
+    document.body.style.cursor = "crosshair";
+    // document.body.classList.add("cropping-mode");
   }
 });
 
-document.addEventListener("mousedown", handleMouseDown);
+function showCaptureArea() {
+  if (!captureArea) {
+    captureArea = createCaptureArea();
+    document.body.appendChild(captureArea);
+  }
+  captureArea.style.display = "block";
+}
+
+document.addEventListener("mousedown", handleMouseDown, true);
 document.addEventListener("mousemove", handleMouseMove);
 document.addEventListener("mouseup", handleMouseUp);
 
-okButton.addEventListener("click", handleOkButtonClick);
+// okButton.addEventListener("click", handleOkButtonClick);
 
 function handleOkButtonClick() {
-  if (endX <= startX || endY <= startY) {
-    console.error("Invalid crop dimensions.");
-    return;
-  }
-
   // Calculate the dimensions of the capture area
   let cropWidth = endX - startX;
   let cropHeight = endY - startY;
 
-  console.error(cropWidth);
-
-  // Ensure that the canvas dimensions are scaled by the device pixel ratio
-  let dpr = window.devicePixelRatio || 1;
-  cropWidth *= dpr;
-  cropHeight *= dpr;
-
-  // Ensure non-zero width and height
-  if (cropWidth <= 0 || cropHeight <= 0) {
-    console.error("Invalid crop dimensions.");
-    return;
-  }
-
-  // Use html2canvas to capture just the desired portion of the screen
-  html2canvas(document.body, {
-    useCORS: true, // Allows images from external domains to be loaded (if CORS policy allows)
-    // scale: window.devicePixelRatio, // Adjust for device pixel ratio
-    x: startX, // Starting X coordinate
-    y: startY, // Starting Y coordinate
-    width: cropWidth, // Width of the capture area
-    height: cropHeight, // Height of the capture area
-    logging: true,
-  }).then((canvas) => {
-    let croppedCanvas = document.createElement("canvas");
-    let ctx = croppedCanvas.getContext("2d");
-
-    // Set the dimensions of the cropped canvas
-    croppedCanvas.width = cropWidth;
-    croppedCanvas.height = cropHeight;
-
-    // Draw the captured area onto the new canvas
-    ctx.drawImage(
-      canvas,
-      0,
-      0,
-      cropWidth,
-      cropHeight,
-      0,
-      0,
-      cropWidth,
-      cropHeight
-    );
-
-    // Convert the canvas to a data URL and then to a blob
-    croppedCanvas.toBlob(function (blob) {
-      let url = URL.createObjectURL(blob);
-      let a = document.createElement("a");
-      a.href = url;
-      a.download = "cropped-image.png";
-      a.click();
-      URL.revokeObjectURL(url); // Clean up the URL object
-    }, "image/png");
-
-    // captureArea.style.display = "none";
-    // captureArea.style.width = "0px";
-    // captureArea.style.height = "0px";
-    // startX = 0;
-    // startY = 0;
-    // endX = 0;
-    // endY = 0;
-    // isCropping = false;
-    // isResizing = false;
-    // isMoving = false;
+  // Send a message to the background script to capture the tab
+  chrome.runtime.sendMessage({ action: "captureTab" }, (response) => {
+    if (response && response.dataUrl) {
+      cropImage(
+        response.dataUrl,
+        { x: startX, y: startY, width: cropWidth, height: cropHeight },
+        (croppedDataUrl) => {
+          downloadImage(croppedDataUrl, "cropped-image.png");
+        }
+      );
+    } else {
+      console.error("Failed to capture tab.");
+    }
   });
-
-  // Optionally, hide or remove the capture area and the button
 }
 
-// function handleOkButtonClick() {
-//   let dpr = window.devicePixelRatio || 1;
-//   let adjustedStartX = (startX + window.scrollX) * dpr;
-//   let adjustedStartY = (startY + window.scrollY) * dpr;
-//   let cropWidth = (endX - startX) * dpr;
-//   let cropHeight = (endY - startY) * dpr;
-//   // Use html2canvas to capture the entire body
-//   html2canvas(document.body, {
-//     useCORS: true, // This is important for loading images from external domains
-//     onclone: function (clonedDoc) {
-//       // Hide everything except the capture area in the cloned document
-//       clonedDoc.body.style.overflow = "hidden";
-//       clonedDoc.documentElement.scrollTop = 0;
-//       clonedDoc.documentElement.scrollLeft = 0;
+function cropImage(dataUrl, cropArea, callback) {
+  const dpr = window.devicePixelRatio || 1; // Get the device pixel ratio
+  const image = new Image();
+  image.onload = () => {
+    const canvas = document.createElement("canvas");
+    canvas.width = cropArea.width * dpr; // Adjust for device pixel ratio
+    canvas.height = cropArea.height * dpr; // Adjust for device pixel ratio
+    const ctx = canvas.getContext("2d");
 
-//       console.log(adjustedStartX, startX, cropHeight, cropWidth);
+    ctx.drawImage(
+      image,
+      cropArea.x * dpr, // Adjust x coordinate for device pixel ratio
+      cropArea.y * dpr, // Adjust y coordinate for device pixel ratio
+      cropArea.width * dpr, // Use cropped width adjusted for device pixel ratio
+      cropArea.height * dpr, // Use cropped height adjusted for device pixel ratio
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
 
-//       let clonedCaptureArea = clonedDoc.getElementById("capture-area");
-//       if (clonedCaptureArea) {
-//         clonedCaptureArea.style.border = "none";
-//         clonedCaptureArea.style.top = `${adjustedStartY}px`;
-//         clonedCaptureArea.style.left = `${adjustedStartX}px`;
-//         clonedCaptureArea.style.width = `${cropWidth}px`;
-//         clonedCaptureArea.style.height = `${cropHeight}px`;
-//         clonedCaptureArea.style.position = "absolute";
-//         clonedCaptureArea.style.zIndex = "9999";
-//       }
-//     },
-//   }).then((canvas) => {
-//     let croppedCanvas = document.createElement("canvas");
-//     let ctx = croppedCanvas.getContext("2d");
+    callback(canvas.toDataURL("image/png"));
+  };
+  image.onerror = () => {
+    console.error("Image could not be loaded for cropping.");
+  };
+  image.src = dataUrl; // Set the source to the data URL of the captured tab
+}
 
-//     croppedCanvas.width = cropWidth;
-//     croppedCanvas.height = cropHeight;
-
-//     // Draw the cropped area onto the new canvas
-//     ctx.drawImage(
-//       canvas,
-//       adjustedStartX,
-//       adjustedStartY,
-//       cropWidth,
-//       cropHeight,
-//       0,
-//       0,
-//       cropWidth,
-//       cropHeight
-//     );
-
-//     // Convert the canvas to a data URL and then to a blob
-//     croppedCanvas.toBlob(function (blob) {
-//       let url = URL.createObjectURL(blob);
-//       let a = document.createElement("a");
-//       a.href = url;
-//       a.download = "cropped-image.png";
-//       a.click();
-//     }, "image/png");
-//   });
-
-//   // Optionally, hide or remove the capture area and the button
-//   captureArea.style.display = "none";
-// }
+function downloadImage(dataUrl, filename) {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 
 function updateCaptureAreaCoordinates() {
+  const scrollX = window.scrollX || document.documentElement.scrollLeft;
+  const scrollY = window.scrollY || document.documentElement.scrollTop;
   let rect = captureArea.getBoundingClientRect();
-  startX = rect.left + window.scrollX;
-  startY = rect.top + window.scrollY;
+  startX = rect.left + scrollX;
+  startY = rect.top + scrollY;
   endX = startX + rect.width;
   endY = startY + rect.height;
 }
@@ -211,11 +170,13 @@ function handleMouseDown(e) {
     captureArea.style.top = startY + "px";
     captureArea.style.width = "0px";
     captureArea.style.height = "0px";
+    captureArea.style.display = "block";
   }
   e.preventDefault();
 }
 
 function handleMouseMove(e) {
+  e.stopPropagation();
   if (isResizing) {
     // Update the dimensions of the capture area during resizing
     captureArea.style.width = `${Math.max(
@@ -248,10 +209,8 @@ function handleMouseUp(event) {
     // Finalize the position and size of captureArea
     updateCaptureAreaCoordinates();
   }
-
-  // Reset the interaction flags and cursor style
   isCropping = false;
   isResizing = false;
   isMoving = false;
-  captureArea.style.cursor = "grab";
+  // captureArea.style.cursor = "grab";
 }
