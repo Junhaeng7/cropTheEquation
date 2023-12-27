@@ -39,7 +39,6 @@ function createCaptureArea() {
     isCropping = false;
     isResizing = false;
     isMoving = false;
-    // document.body.classList.remove("cropping-mode");
     startX = null;
     startY = null;
     endX = null;
@@ -47,9 +46,7 @@ function createCaptureArea() {
     movingX = null;
     movingY = null;
     document.body.style.cursor = "default";
-    document.body.style.pointerEvents = "auto";
-
-    //
+    removeCaptureEventListeners();
   });
   captureArea.appendChild(closeButton);
 
@@ -64,6 +61,7 @@ let isCropping = false,
 
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   if (request.action === "startCropping") {
+    addCaptureEventListeners();
     showCaptureArea();
     isCropping = true;
     document.body.style.cursor = "crosshair";
@@ -79,9 +77,17 @@ function showCaptureArea() {
   captureArea.style.display = "block";
 }
 
-document.addEventListener("mousedown", handleMouseDown, true);
-document.addEventListener("mousemove", handleMouseMove);
-document.addEventListener("mouseup", handleMouseUp);
+function addCaptureEventListeners() {
+  document.addEventListener("mousedown", handleMouseDown, true);
+  document.addEventListener("mousemove", handleMouseMove);
+  document.addEventListener("mouseup", handleMouseUp);
+}
+
+function removeCaptureEventListeners() {
+  document.removeEventListener("mousedown", handleMouseDown, true);
+  document.removeEventListener("mousemove", handleMouseMove);
+  document.removeEventListener("mouseup", handleMouseUp);
+}
 
 // okButton.addEventListener("click", handleOkButtonClick);
 
@@ -107,6 +113,7 @@ function handleOkButtonClick() {
 }
 
 function cropImage(dataUrl, cropArea, callback) {
+  updateCaptureAreaCoordinates();
   const dpr = window.devicePixelRatio || 1; // Get the device pixel ratio
   const image = new Image();
   image.onload = () => {
@@ -145,11 +152,9 @@ function downloadImage(dataUrl, filename) {
 }
 
 function updateCaptureAreaCoordinates() {
-  const scrollX = window.scrollX || document.documentElement.scrollLeft;
-  const scrollY = window.scrollY || document.documentElement.scrollTop;
   let rect = captureArea.getBoundingClientRect();
-  startX = rect.left + scrollX;
-  startY = rect.top + scrollY;
+  startX = rect.left;
+  startY = rect.top;
   endX = startX + rect.width;
   endY = startY + rect.height;
 }
@@ -212,5 +217,5 @@ function handleMouseUp(event) {
   isCropping = false;
   isResizing = false;
   isMoving = false;
-  // captureArea.style.cursor = "grab";
+  captureArea.style.cursor = "grab";
 }
